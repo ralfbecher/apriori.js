@@ -33,10 +33,12 @@ var Apriori;
     Apriori.FrequentItemSet = FrequentItemSet;
 
     var AssociationRule = (function () {
-        function AssociationRule(lhs, rhs, confidence) {
+        function AssociationRule(lhs, rhs, support, confidence, lift) {
             this.lhs = lhs;
             this.rhs = rhs;
+			this.support = support;
             this.confidence = confidence;
+			this.lift = lift;
         }
         return AssociationRule;
     })();
@@ -81,13 +83,13 @@ var Apriori;
                 return frequency ? frequency / transactions.length : 0;
             };
             var foundSubSets = [];
-            var isTheRuleAlreadyFound = function (itemSet) {
-                var found = false;
-                foundSubSets.forEach(function (subset) {
-                    if (!found)
-                        found = subset.toString() === itemSet.toString();
-                });
-                return found;
+            var isTheRuleAlreadyFound = function (associationRules, lhsItemSet, rhsItemSet) {
+				for (var r in associationRules) {
+					if (r.lhs && r.rhs && r.lhs.toString() === lhsItemSet.toString() && r.rhs.toString() === rhsItemSet.toString()) {
+						return true;
+					}
+				}
+                return false;
             };
 
             if (self.debugMode) {
@@ -99,10 +101,11 @@ var Apriori;
                 var diffItemSet = ArrayUtils.getDiffArray(currentItemSet, subsetItemSet);
                 if (diffItemSet.length > 0) {
                     var itemSupport = calculateSupport(currentItemSet, frequencies, transactions), subsetSupport = calculateSupport(subsetItemSet, frequencies, transactions), confidence = itemSupport / subsetSupport;
-
-                    if (!isNaN(confidence) && !isTheRuleAlreadyFound(subsetItemSet) && confidence >= self.minConfidence) {
+                    if (!isNaN(confidence) && !isTheRuleAlreadyFound(associationRules, subsetItemSet, diffItemSet) && confidence >= self.minConfidence) {
                         foundSubSets.push(subsetItemSet);
-                        associationRules.push(new Apriori.AssociationRule(subsetItemSet, diffItemSet, confidence));
+						var diffSupport = calculateSupport(diffItemSet, frequencies, transactions);
+						var lift = itemSupport / (diffSupport * subsetSupport);						
+                        associationRules.push(new Apriori.AssociationRule(subsetItemSet, diffItemSet, itemSupport, confidence, lift));
                     }
                 }
             };
@@ -172,16 +175,17 @@ var Apriori;
             }
             return filteredItemSets;
         };
-
-        Algorithm.prototype.showAnalysisResultFromFile = function (filename) {
+		
+        Algorithm.prototype.showAnalysisResultFromCSV = function (data) {
             var self = this;
-            require('fs').readFile(filename, 'utf8', function (err, data) {
-                if (err)
-                    throw err;
-                var transactions = ArrayUtils.readCSVToArray(data, ',');
-                var analysisResult = self.analyze(transactions);
-                console.log(JSON.stringify(analysisResult.associationRules));
-            });
+			var transactions = ArrayUtils.readCSVToArray(data, ',');
+			var analysisResult = self.analyze(transactions);
+        };
+
+        Algorithm.prototype.showAnalysisResultFromArray = function (transactions) {
+            var self = this;
+			var analysisResult = self.analyze(transactions);
+			console.log(JSON.stringify(analysisResult.associationRules));
         };
 
         Algorithm.prototype.getTime = function (initial) {
